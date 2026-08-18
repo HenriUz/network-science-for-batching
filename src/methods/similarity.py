@@ -2,10 +2,10 @@ import numpy as np
 
 from process.dataset import Problem
 from process.graph import with_fast_builder
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_array
 
 def _build_common_items(problem: Problem):
-    # Number of items in each order to build the sparse matrix in COO format.
+    # Number of items in each order to build the sparse matrix.
     lengths = [len(order) for order in problem.orders]
 
     # The rows of the matrix are the orders (with the ID repeated for each item they contain), and the columns are the items (repeated across different orders).
@@ -20,7 +20,7 @@ def _build_common_items(problem: Problem):
     data = np.ones(len(rows), dtype=np.int32)
 
     # Create a binary `order X item` matrix, indicating whether the item is included in the order.
-    M = csr_matrix((data, (rows, cols)), shape=(problem.o, problem.i))
+    M = csr_array((data, (rows, cols)), shape=(problem.o, problem.i))
 
     # Multiplies the matrix by its transpose. The result is a matrix of the same dimensions as the original, `order X order`, where each entry indicates how many items they have in common.
     C = (M @ M.T).tocoo()

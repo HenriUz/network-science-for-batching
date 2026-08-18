@@ -9,6 +9,8 @@ def main(instance_path: str) -> Problem:
     problem = Problem(instance_path)
     graph = Graph(problem, common_items)
 
+    print(graph.adj_matrix())
+
     return problem
 
 if __name__ == "__main__":
