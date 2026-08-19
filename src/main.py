@@ -9,7 +9,7 @@ def main(instance_path: str) -> Problem:
     problem = Problem(instance_path)
     graph = Graph(problem, common_items)
 
-    print(graph.adj_matrix())
+    print(graph.g.get_adjacency_sparse(attribute="weight"))
 
     return problem
 
