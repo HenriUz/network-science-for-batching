@@ -1,13 +1,13 @@
 import sys
 
-from methods.similarity import common_items
+from methods.similarity import common_aisles, common_items
 from process.dataset import Problem
 from process.graph import Graph
 from random import seed
 
 def main(instance_path: str) -> Problem:
     problem = Problem(instance_path)
-    graph = Graph(problem, common_items)
+    graph = Graph(problem, common_aisles)
 
     print(graph.g.get_adjacency_sparse(attribute="weight"))
 
