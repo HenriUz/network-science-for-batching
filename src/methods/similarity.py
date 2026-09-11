@@ -1,8 +1,9 @@
 import numpy as np
+from scipy.sparse import csr_array
 
 from process.dataset import Problem
 from process.graph import with_fast_builder
-from scipy.sparse import csr_array
+
 
 def _build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
     # Number of items in each order to build the sparse matrix.
@@ -26,7 +27,7 @@ def _build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
     C = (M @ M.T).tocoo()
 
     mask = C.row < C.col
-    return sorted(list(zip(C.row[mask].tolist(), C.col[mask].tolist(), C.data[mask].tolist())))
+    return sorted(zip(C.row[mask].tolist(), C.col[mask].tolist(), C.data[mask].tolist()))
 
 @with_fast_builder(_build_common_items)
 def common_items(problem: Problem, origin: int, target: int) -> int:

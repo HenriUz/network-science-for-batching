@@ -1,16 +1,19 @@
+from collections.abc import Callable
+from typing import Any
+
 import igraph as ig
 
-from collections.abc import Callable
 from process.dataset import Problem
 
-def with_fast_builder(fast_builder: Callable[[Problem], list[tuple[int, int, int]]]):
+
+def with_fast_builder(fast_builder: Callable[[Problem], list[tuple[int, int, Any]]]):
     """
-    Attach an optimized builder to a similarity function. 
-    
+    Attach an optimized builder to a similarity function.
+
     Args:
-        fast_builder (Callable[[Problem], list[tuple[int, int, int]]]): An optimized function that takes "Problem" as a parameter and returns the list of edges in the graph.
+        fast_builder (Callable[[Problem], list[tuple[int, int, Any]]]): An optimized function that takes "Problem" as a parameter and returns the list of edges in the graph.
     """
-    
+
     def decorator(func):
         func.fast_builder = fast_builder
         return func
@@ -18,11 +21,11 @@ def with_fast_builder(fast_builder: Callable[[Problem], list[tuple[int, int, int
 
 def build_edges(
     problem: Problem,
-    similarity: Callable[[Problem, int, int], any]
-) -> list[tuple[int, int, any]]:
+    similarity: Callable[[Problem, int, int], Any]
+) -> list[tuple[int, int, Any]]:
     """
     Builds a list of edges in the format (origin, target, weight).
-    
+
     The origin and target are the orders defined in "problem", and the weight is calculated according to the "similarity" function.
 
     If the "similarity" function has the “fast_builder” attribute, it will be taken into account
@@ -32,13 +35,13 @@ def build_edges(
         similarity (Callable[[Problem], list[tuple[int, int, int]]]): A function that takes a "Problem" instance and two order IDs and returns the similarity between them.
 
     Returns:
-        edges (list[tuple[int, int, any]]): List of edges.
+        edges (list[tuple[int, int, Any]]): List of edges.
     """
 
     fast_builder = getattr(similarity, "fast_builder", None)
     if fast_builder is not None:
         return fast_builder(problem)
-    
+
     n = problem.o
     return [
         (o, t, sim)
@@ -47,10 +50,10 @@ def build_edges(
         if (sim := similarity(problem, o, t)) != 0.0
     ]
 
-class Graph():
-    def __init__(self, problem: Problem, similarity: Callable[[Problem, int, int], any]) -> None:
+class Graph:
+    def __init__(self, problem: Problem, similarity: Callable[[Problem, int, int], Any]) -> None:
         self.problem = problem
-        
+
         edges = build_edges(problem, similarity)
         self.g = ig.Graph(
             n = problem.o,

@@ -10,7 +10,7 @@ import numpy as np
 from process.graph import Graph
 
 
-class Metrics():
+class Metrics:
     """Calcula métricas estruturais e ponderadas de uma instância de ``Graph``."""
 
     def __init__(self, graph: Graph) -> None:

@@ -1,10 +1,10 @@
 import sys
 
-from methods.similarity import common_aisles, common_items
+from methods.similarity import common_aisles
 from process.dataset import Problem
-from process.metrics import Metrics
 from process.graph import Graph
-from random import seed
+from process.metrics import Metrics
+
 
 def main(instance_path: str, use: int) -> Problem:
     problem = Problem(instance_path)
@@ -24,6 +24,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Incorrect number of arguments.")
         print("Use: python main.py <instance_path> <use (0: metrics, 1: solver)>")
-        exit(1)
-    
+        sys.exit(1)
+
     main(sys.argv[1], int(sys.argv[2]))

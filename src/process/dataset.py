@@ -1,6 +1,7 @@
-import os
+import sys
 
-class Problem():
+
+class Problem:
     """
     Reads and processes the data contained in a dataset file.
 
@@ -48,10 +49,10 @@ class Problem():
 
         except FileNotFoundError:
             print(f"Error: file '{instance_path}' not found.")
-            exit(1)
+            sys.exit(1)
         except OSError as e:
             print(f"Error opening the file: {e}")
-            exit(1)
+            sys.exit(1)
 
     def objective_function(
         self,
