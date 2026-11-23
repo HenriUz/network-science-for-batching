@@ -1,6 +1,6 @@
 import sys
 
-from methods.similarity import common_aisles
+from methods.similarity import build_common_aisles
 from process.dataset import Problem
 from process.graph import Graph
 from process.metrics import Metrics
@@ -8,7 +8,7 @@ from process.metrics import Metrics
 
 def main(instance_path: str, use: int) -> Problem:
     problem = Problem(instance_path)
-    graph = Graph(problem, common_aisles)
+    graph = Graph(problem, build_common_aisles)
 
     match use:
         case 0:
@@ -19,6 +19,7 @@ def main(instance_path: str, use: int) -> Problem:
             print(graph.g.get_adjacency_sparse(attribute="weight"))
 
     return problem
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

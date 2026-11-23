@@ -2,10 +2,19 @@ import numpy as np
 from scipy.sparse import csr_array
 
 from process.dataset import Problem
-from process.graph import with_fast_builder
 
 
-def _build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
+def build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
+    """
+    Calculate the similarity between two orders by counting how many item IDs they have in common.
+
+    # Args:
+        - problem (Problem): Problem instance.
+
+    # Returns:
+        edges (list[tuple[int, int, int]]): List of edges in the format (vertex, vertex, weight).
+    """
+
     # Number of items in each order to build the sparse matrix.
     lengths = [len(order) for order in problem.orders]
 
@@ -16,7 +25,7 @@ def _build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
         dtype=np.int32,
         count=sum(lengths),
     )
-    
+
     # Each non-zero entry in the matrix is equal to 1.
     data = np.ones(len(rows), dtype=np.int32)
 
@@ -27,29 +36,22 @@ def _build_common_items(problem: Problem) -> list[tuple[int, int, int]]:
     C = (M @ M.T).tocoo()
 
     mask = C.row < C.col
-    return sorted(zip(C.row[mask].tolist(), C.col[mask].tolist(), C.data[mask].tolist()))
+    return sorted(
+        zip(C.row[mask].tolist(), C.col[mask].tolist(), C.data[mask].tolist())
+    )
 
-@with_fast_builder(_build_common_items)
-def common_items(problem: Problem, origin: int, target: int) -> int:
+
+def build_common_aisles(problem: Problem) -> list[tuple[int, int, float]]:
     """
-    Calculate the similarity between two orders by counting how many item IDs they have in common.
+    Calculate the similarity between two orders based on the number of aisles they have in common, weighted by the Jaccard (|A ∩ B| / |A ∪ B|). An edge will be considered to exist only if the Jaccard is greater than 0.5.
 
-    This function has the "fast_builder" attribute, which is a function that takes a Problem instance and returns a list of edges based on item similarity. It is recommended to use fast_builder if the goal is to build the graph from scratch.
+    # Args:
+        - problem (Problem): Problem instance.
 
-    Args:
-        problem (Problem): Problem instance.
-        origin (int): Origin order.
-        target (int): Target order.
-    
-    Returns:
-        similarity (int): Number of shared item IDs.
+    # Returns:
+        edges (list[tuple[int, int, float]]): List of edges in the format (vertex, vertex, weight).
     """
 
-    o_itens = problem.orders[origin].keys()
-    t_itens = problem.orders[target].keys()
-    return len(o_itens & t_itens)
-
-def _build_common_aisles(problem: Problem) -> list[tuple[int, int, float]]:
     # --- Order x Item matrix (binary: does order o contain item i?) ---
     order_lengths = [len(order) for order in problem.orders]
     rows_o = np.repeat(np.arange(problem.o), order_lengths)
@@ -92,40 +94,7 @@ def _build_common_aisles(problem: Problem) -> list[tuple[int, int, float]]:
     union = degree[o] + degree[d] - intersection
     jaccard = intersection / union
 
+    keep = jaccard > 0.5
+    o, d, jaccard = o[keep], d[keep], jaccard[keep]
+
     return sorted(zip(o.tolist(), d.tolist(), jaccard.tolist()))
-
-@with_fast_builder(_build_common_aisles)
-def common_aisles(problem: Problem, origin: int, target: int) -> float:
-    """
-    Calculate the similarity between two orders based on the number of aisles they have in common, weighted by the Jaccard (|A ∩ B| / |A ∪ B|).
-
-    This function has the "fast_builder" attribute, which is a function that takes a Problem instance and returns a list of edges based on item similarity. It is recommended to use fast_builder if the goal is to build the graph from scratch.
-
-    Args:
-        problem (Problem): Problem instance.
-        origin (int): Origin order.
-        target (int): Target order.
-    
-    Returns:
-        similarity (float): Jaccard similarity between the two orders.
-    """
-
-    o_aisles = set()
-    t_aisles = set()
-
-    for aisle_idx, aisle in enumerate(problem.aisles):
-        for item in problem.orders[origin]:
-            if item in aisle:
-                o_aisles.add(aisle_idx)
-                break
-
-        for item in problem.orders[target]:
-            if item in aisle:
-                t_aisles.add(aisle_idx)
-                break
-
-    union = len(o_aisles | t_aisles)
-    if union == 0:
-        return 0.0
-
-    return len(o_aisles & t_aisles) / union
