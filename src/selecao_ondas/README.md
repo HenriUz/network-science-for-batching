@@ -45,8 +45,12 @@ git clone https://github.com/mercadolibre/challenge-sbpo-2025
 | `fronteira.py` | Fronteira aproximada unidades × corredores (modelo biobjetivo) pela trajetória do descascamento. |
 | `converter_zalando.py`, `rodar_zalando.py` | Conversão das instâncias da Zalando (Abelli et al., 2024) para o formato do desafio e execução das heurísticas. |
 | `dicionario_dados_zalando.md` | Dicionário de dados das instâncias da Zalando. |
+| `dicionario_dados_datasets.md` | Dicionário conjunto: formato oficial Mercado Livre, arquivos locais e dados originais e convertidos da Zalando. |
 | `gerar_tabelas.py` | Tabelas LaTeX do texto a partir dos CSVs. |
 | `desenhar_grafos.py` | Figura dos grafos de demanda (instâncias A-0001 e A-0017). |
+| `comparar_comunidades.py` | Compara Leiden e Louvain em G_O e G_A, incluindo modularidade, tamanhos e NMI. |
+| `comparar_metricas_crescimento.py` | Ablation de critérios de H3: força/grau locais e rankings por força, grau, PageRank e k-core; mede viabilidade, razão e perfil de centralidade dos corredores selecionados. |
+| `results/metricas_crescimento/README.md` | Dicionário dos arquivos da ablação, método de comparação, síntese dos resultados e instruções para reproduzi-los com as instâncias oficiais e BKS. |
 
 ## Uso
 
@@ -64,6 +68,17 @@ python caracterizar_redes.py $REPO/datasets resultados/redes_caracterizacao.csv 
 python rodar_heuristicas.py $REPO resultados/heuristicas_resultados.csv        # ~40 min em 2 núcleos
 python rodar_heuristicas.py $REPO resultados/heuristicas_x.csv x               # um conjunto só
 
+# comparação controlada de comunidades em uma instância
+python comparar_comunidades.py $REPO/datasets/a/instance_0005.txt resultados/comunidades.csv 10
+
+# ablação de métricas para priorizar corredores na H3
+python comparar_metricas_crescimento.py ../../dataset resultados/metricas_crescimento
+
+# caracterização estrutural com centralidades
+python caracterizar_redes.py $REPO/datasets resultados/redes.csv 10 --centralidades
+# incluir betweenness também (mais caro):
+python caracterizar_redes.py $REPO/datasets resultados/redes.csv 10 --centralidades --betweenness
+
 # fronteira e figura
 python fronteira.py $REPO/datasets/a/instance_0005.txt resultados/fronteira_a5.csv
 python desenhar_grafos.py $REPO resultados/grafos_demanda
@@ -75,6 +90,18 @@ python rodar_zalando.py zalando_convertidas resultados/heuristicas_zalando.csv s
 # tabelas LaTeX
 python gerar_tabelas.py resultados resultados/tabelas_resultados.tex
 ```
+
+O experimento de ablação mantém a mesma heurística de crescimento e varia
+somente a regra de priorização do próximo corredor. `forca_local` é o H3
+original (soma de pesos das conexões com corredores já abertos); `grau_local`
+conta vizinhos já abertos sem pesos; `forca`, `grau`, `pagerank` e `k_core`
+usam rankings globais dos corredores. O CSV detalhado também reporta o
+percentil médio e a fração entre os 10% de maior centralidade dos corredores
+da solução. O resumo compara as razões pareadas pelo teste de Wilcoxon e
+corrige os valores-p pelo método de Holm. Essas estatísticas ajudam a
+interpretar o perfil selecionado, mas não devem ser interpretadas como
+causalidade. Os 20 arquivos locais não têm procedência oficial confirmada;
+valide as hipóteses também nas instâncias oficiais antes de generalizar.
 
 ## Resultados
 

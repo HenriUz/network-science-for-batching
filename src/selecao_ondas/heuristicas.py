@@ -14,11 +14,16 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-import leidenalg as la
 import numpy as np
 import scipy.sparse as sp
 
-from grafos import afinidade_corredores, grafo_pedido_corredor, para_igraph, projecao_corredores
+from grafos import (
+    afinidade_corredores,
+    detectar_comunidades,
+    grafo_pedido_corredor,
+    para_igraph,
+    projecao_corredores,
+)
 from instancia import Instancia, avaliar
 
 
@@ -155,9 +160,18 @@ def crescimento_por_oferta(n: Nucleo, kmax: int | None = None, paciencia: int = 
 
 # ================================================================ H3
 def crescimento_guiado(n: Nucleo, G_A: sp.csr_matrix, sementes: int = 5, kmax: int | None = None,
-                       paciencia: int = 15) -> Solucao | None:
+                       paciencia: int = 15, metrica: str = "forca_local") -> Solucao | None:
+    """Cresce ondas priorizando a conectividade local ou uma centralidade de corredor.
+
+    ``forca_local`` reproduz H3: soma dos pesos das arestas para corredores
+    selecionados. ``grau_local`` conta essas conexoes sem usar seus pesos.
+    As demais opcoes usam uma centralidade global para ordenar candidatos.
+    """
     t0 = time.time()
     kmax = kmax or n.inst.n_corredores
+    metricas_estaticas = {"grau", "forca", "pagerank", "k_core"}
+    if metrica != "forca_local" and metrica != "grau_local" and metrica not in metricas_estaticas:
+        raise ValueError(f"métrica desconhecida: {metrica}")
     # sementes: corredores com melhor razão sozinhos
     razoes = np.zeros(n.inst.n_corredores)
     for a in range(n.inst.n_corredores):
@@ -165,17 +179,33 @@ def crescimento_guiado(n: Nucleo, G_A: sp.csr_matrix, sementes: int = 5, kmax: i
         razoes[a] = U
     melhor = None
     G = G_A.tocsr()
+    conexoes = G if metrica == "forca_local" else G.copy()
+    if metrica == "grau_local":
+        conexoes.data[:] = 1.0
+    centralidade = None
+    if metrica in metricas_estaticas:
+        g = para_igraph(G)
+        if metrica == "grau":
+            centralidade = np.asarray(g.degree(), dtype=float)
+        elif metrica == "forca":
+            centralidade = np.asarray(g.strength(weights="weight"), dtype=float)
+        elif metrica == "pagerank":
+            centralidade = np.asarray(g.pagerank(weights="weight", directed=False), dtype=float)
+        else:
+            centralidade = np.asarray(g.coreness(), dtype=float)
+
     for s in np.argsort(-razoes)[:sementes]:
         conexao = np.zeros(n.inst.n_corredores)
 
-        def escore(atual, cand, conexao=conexao):
-            return conexao[cand]
+        def escore(atual, cand, conexao=conexao, centralidade=centralidade):
+            return centralidade[cand] if centralidade is not None else conexao[cand]
 
         def atualizar(a, conexao=conexao):
-            linha = G.getrow(a)
+            linha = conexoes.getrow(a)
             conexao[linha.indices] += linha.data
 
-        sol = _crescer(n, [int(s)], escore, list(range(n.inst.n_corredores)), "H3", t0, kmax, paciencia,
+        sol = _crescer(n, [int(s)], escore, list(range(n.inst.n_corredores)),
+                       f"H3-{metrica.upper()}", t0, kmax, paciencia,
                        ao_abrir=atualizar)
         melhor = _melhor(melhor, sol)
     if melhor:
@@ -253,20 +283,23 @@ def descascamento(n: Nucleo, inicio=None, metodo: str = "H1", frac: float = 0.05
 
 # ================================================================ H4
 def comunidades_corredores(n: Nucleo, G_A: sp.csr_matrix, resolucoes=(0.5, 1.0, 2.0, 4.0),
-                           semente: int = 0) -> Solucao | None:
+                           semente: int = 0, algoritmo: str = "leiden") -> Solucao | None:
     t0 = time.time()
     g = para_igraph(G_A)
     melhor = None
     vistos = set()
-    for gamma in resolucoes:
-        part = la.find_partition(g, la.RBConfigurationVertexPartition, weights="weight",
-                                 resolution_parameter=gamma, seed=semente)
+    resolucoes_uso = resolucoes if algoritmo.lower() == "leiden" else (1.0,)
+    for gamma in resolucoes_uso:
+        part = detectar_comunidades(g, algoritmo=algoritmo, resolucao=gamma, semente=semente)
         for com in part:
             chave = frozenset(com)
             if chave in vistos:
                 continue
             vistos.add(chave)
-            melhor = _melhor(melhor, descascamento(n, inicio=sorted(com), metodo="H4"))
+            melhor = _melhor(
+                melhor,
+                descascamento(n, inicio=sorted(com), metodo=f"H4-{algoritmo.upper()}"),
+            )
     if melhor:
         melhor.tempo = time.time() - t0
     return melhor
@@ -274,14 +307,14 @@ def comunidades_corredores(n: Nucleo, G_A: sp.csr_matrix, resolucoes=(0.5, 1.0, 
 
 # ================================================================ H2
 def comunidades_pedidos(n: Nucleo, G_O: sp.csr_matrix, resolucoes=(0.5, 1.0, 2.0, 5.0),
-                        semente: int = 0) -> Solucao | None:
+                        semente: int = 0, algoritmo: str = "leiden") -> Solucao | None:
     t0 = time.time()
     g = para_igraph(G_O)
     G = G_O.tocsr()
     melhor = None
-    for gamma in resolucoes:
-        part = la.find_partition(g, la.RBConfigurationVertexPartition, weights="weight",
-                                 resolution_parameter=gamma, seed=semente)
+    resolucoes_uso = resolucoes if algoritmo.lower() == "leiden" else (1.0,)
+    for gamma in resolucoes_uso:
+        part = detectar_comunidades(g, algoritmo=algoritmo, resolucao=gamma, semente=semente)
         for com in part:
             membros = np.array([o for o in com if n.validos[o]])
             if len(membros) == 0 or n.u[membros].sum() < n.lb:
@@ -291,7 +324,12 @@ def comunidades_pedidos(n: Nucleo, G_O: sp.csr_matrix, resolucoes=(0.5, 1.0, 2.0
             # corredores adjacentes à comunidade em G_OA
             oferta_util = (n.Db[membros].sum(axis=0).A1 > 0).astype(np.int32)
             adj = np.flatnonzero((n.S > 0).astype(np.int32) @ oferta_util > 0)
-            sol = descascamento(n, inicio=adj, metodo="H2", pedidos_permitidos=permitidos)
+            sol = descascamento(
+                n,
+                inicio=adj,
+                metodo=f"H2-{algoritmo.upper()}",
+                pedidos_permitidos=permitidos,
+            )
             melhor = _melhor(melhor, sol)
     if melhor:
         melhor.tempo = time.time() - t0
@@ -340,8 +378,10 @@ def executar_todas(inst: Instancia, k: int = 10) -> list[Solucao]:
         ("B0", lambda: crescimento_por_oferta(n), 0.0),
         ("H1", lambda: descascamento(n), 0.0),
         ("H2", lambda: comunidades_pedidos(n, G_O), t_GO),
+        ("H2-LOUVAIN", lambda: comunidades_pedidos(n, G_O, algoritmo="louvain"), t_GO),
         ("H3", lambda: crescimento_guiado(n, G_A), t_GA),
         ("H4", lambda: comunidades_corredores(n, G_A), t_GA),
+        ("H4-LOUVAIN", lambda: comunidades_corredores(n, G_A, algoritmo="louvain"), t_GA),
     ]:
         s = f()
         if s is not None:

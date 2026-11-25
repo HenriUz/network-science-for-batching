@@ -13,6 +13,7 @@ Uso como script:
 from __future__ import annotations
 
 import argparse
+import random
 from pathlib import Path
 
 import igraph as ig
@@ -208,6 +209,86 @@ def metricas(g: ig.Graph, semente: int = 0, resolucao: float = 1.0) -> dict:
         "modularidade": g.modularity(part.membership, weights="weight") if m else 0.0,
         "comunidades": int(len(nao_triviais)),
         "comunidade_tam_med": float(np.median(nao_triviais)) if len(nao_triviais) else 0.0,
+    }
+
+
+def detectar_comunidades(
+    g: ig.Graph,
+    algoritmo: str = "leiden",
+    resolucao: float = 1.0,
+    semente: int = 0,
+):
+    """Detecta comunidades por Leiden ou Louvain.
+
+    Louvain nao oferece resolucao de RBConfiguration; usa a modulacao
+    padrao de igraph. O retorno segue o formato de membership do igraph.
+    """
+    if g.ecount() == 0:
+        membership = list(range(g.vcount()))
+        return ig.VertexClustering(g, membership)
+    if algoritmo.lower() == "louvain":
+        ig.set_random_number_generator(random.Random(semente))
+        return g.community_multilevel(weights="weight", return_levels=False)
+    if algoritmo.lower() != "leiden":
+        raise ValueError("algoritmo deve ser 'leiden' ou 'louvain'")
+    return la.find_partition(
+        g,
+        la.RBConfigurationVertexPartition,
+        weights="weight",
+        resolution_parameter=resolucao,
+        seed=semente,
+    )
+
+
+def _resumo_distribuicao(valores) -> dict:
+    if not valores:
+        return {"min": 0.0, "media": 0.0, "mediana": 0.0, "max": 0.0}
+    a = np.asarray(valores, dtype=float)
+    return {
+        "min": float(a.min()),
+        "media": float(a.mean()),
+        "mediana": float(np.median(a)),
+        "max": float(a.max()),
+    }
+
+
+def metricas_centralidade(g: ig.Graph, incluir_betweenness: bool = True) -> dict:
+    """Calcula centralidades e propriedades de nucleo para a rede completa.
+
+    Betweenness/coreness sao relatorios globalmente mais caros e podem ser
+    desativados por grandes experimentos.
+    """
+    n = g.vcount()
+    if n == 0:
+        return {
+            "grau": _resumo_distribuicao([]),
+            "forca": _resumo_distribuicao([]),
+            "betweenness": _resumo_distribuicao([]),
+            "closeness": _resumo_distribuicao([]),
+            "eigenvector": _resumo_distribuicao([]),
+            "pagerank": _resumo_distribuicao([]),
+            "k_core": _resumo_distribuicao([]),
+        }
+
+    grau = [float(v) for v in g.degree()]
+    forca = [float(v) for v in g.strength(weights="weight")] if g.ecount() else [0.0] * n
+    eigenvector = [float(v) for v in g.eigenvector_centrality(weights="weight", scale=True)]
+    pagerank = [float(v) for v in g.pagerank(weights="weight", directed=False)]
+    closeness = [float(v) for v in g.closeness()]
+    k_core = [float(v) for v in g.coreness()]
+    betweenness = (
+        [float(v) for v in g.betweenness(directed=False, weights=None)]
+        if incluir_betweenness
+        else []
+    )
+    return {
+        "grau": _resumo_distribuicao(grau),
+        "forca": _resumo_distribuicao(forca),
+        "betweenness": _resumo_distribuicao(betweenness),
+        "closeness": _resumo_distribuicao(closeness),
+        "eigenvector": _resumo_distribuicao(eigenvector),
+        "pagerank": _resumo_distribuicao(pagerank),
+        "k_core": _resumo_distribuicao(k_core),
     }
 
 
